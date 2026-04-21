@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "All Agents",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["a2a_system/run_all.py"],
+      "port": 8000
+    },
+    {
+      "name": "Boss Agent",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "uvicorn", "agents.boss_agent:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"],
+      "port": 8000
+    },
+    {
+      "name": "Planner Agent",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "uvicorn", "agents.planner_agent:app", "--host", "0.0.0.0", "--port", "8001", "--no-access-log"],
+      "port": 8001
+    },
+    {
+      "name": "Coder Agent",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "uvicorn", "agents.coder_agent:app", "--host", "0.0.0.0", "--port", "8002", "--no-access-log"],
+      "port": 8002
+    },
+    {
+      "name": "Reviewer Agent",
+      "runtimeExecutable": "python3.12",
+      "runtimeArgs": ["-m", "uvicorn", "agents.reviewer_agent:app", "--host", "0.0.0.0", "--port", "8003", "--no-access-log"],
+      "port": 8003
+    }
+  ]
+}
