@@ -174,3 +174,33 @@ def log_metric(session_id: str, round_num: int, event: str, data: dict) -> None:
         "event": event,
         "data": data,
     })
+
+
+def log_detailed_message(
+    session_id: str,
+    sender: str,
+    receiver: str,
+    round_num: int,
+    content: str,
+    message_type: str = "peer_message",
+) -> None:
+    """Log detailed message content with payload (like boss-worker's detailed logging)."""
+    DETAILED_LOG = Path(__file__).parent / "logs" / "session.log"
+    DETAILED_LOG.parent.mkdir(exist_ok=True)
+
+    def _file(line: str) -> None:
+        with DETAILED_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+
+    def _file_block(title: str, content_text: str) -> None:
+        sep = "·" * 60
+        _file(f"  ┌─ {title}")
+        for line in content_text.splitlines():
+            _file(f"  │  {line}")
+        _file(f"  └─ {sep}")
+
+    ts = _ts()
+    plain = f"[{ts}] PEER_MSG  {sender} → {receiver}  round={round_num}  type={message_type}  ({len(content)} chars)"
+    _file(plain)
+    if content:
+        _file_block("CONTENT", content)

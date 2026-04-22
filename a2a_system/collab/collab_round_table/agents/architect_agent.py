@@ -22,6 +22,7 @@ from shared.models import (
     AgentCard, AgentCapabilities, AgentSkill, Artifact,
     DataPart, Message, Task, TaskSendParams, extract_data, extract_text, get_artifact_text, text_artifact,
 )
+from logger_rt import log_detailed_message
 
 MAX_TOOL_CALLS = 6
 AGENT_PORT = int(os.getenv("ARCHITECT_PORT", "8010"))
@@ -195,6 +196,8 @@ class ArchitectAgent(BaseAgent):
                                 headers={**_auth_headers(), "X-Sender": "ArchitectAgent"},
                                 timeout=10.0,
                             )
+                            # Log detailed message content
+                            log_detailed_message(session_id, "Architect", to, round_num, content, "peer_message")
                         except Exception as exc:
                             result_msg = f"Failed to deliver to {to}: {exc}"
                         # Notify CommunicationLoggerAgent (best-effort)

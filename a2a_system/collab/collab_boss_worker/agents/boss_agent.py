@@ -83,7 +83,7 @@ BOSS_TOOLS = [
         "parameters": {"type": "object",
             "properties": {
                 "plan": {"type": "string"},
-                "feedback": {"type": "string", "description": "Reviewer feedback. Omit on first call."},
+                "feedback": {"type": ["string", "null"], "description": "Reviewer feedback. Omit on first call."},
             },
             "required": ["plan"]},
     }},

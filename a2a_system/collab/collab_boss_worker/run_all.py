@@ -225,7 +225,10 @@ async def main() -> None:
 
     print("\nShutting down …")
     for p in procs:
-        p.terminate()
+        try:
+            p.terminate()
+        except ProcessLookupError:
+            pass
     await asyncio.gather(*(p.wait() for p in procs), return_exceptions=True)
     print("All agents stopped.")
 

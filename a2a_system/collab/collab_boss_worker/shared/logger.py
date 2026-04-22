@@ -1,16 +1,24 @@
 """
 Shared handoff logger — records every agent-to-agent interaction.
-Writes to stdout (coloured, compact) and to logs/session.log (full detail).
+Writes to:
+  - stdout (coloured, compact)
+  - logs/session.log (full detail, human-readable)
+  - logs/comms.jsonl (per-message JSONL)
+  - logs/metrics.jsonl (per-event metrics JSONL)
 """
 from __future__ import annotations
 
+import json
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "session.log"
+COMMS_JSONL = LOG_DIR / "comms.jsonl"
+METRICS_JSONL = LOG_DIR / "metrics.jsonl"
 
 _COLORS: dict[str, str] = {
     "Client":         "\033[97m",
@@ -50,9 +58,31 @@ def _ts() -> str:
     return datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
 
-# ── Public timers ────────────────────────────────────────────────────────────
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+def _append_comms(obj: dict) -> None:
+    """Append a communication event to JSONL log."""
+    with COMMS_JSONL.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(obj) + "\n")
+
+
+def _append_metrics(obj: dict) -> None:
+    """Append a metric event to JSONL log."""
+    with METRICS_JSONL.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(obj) + "\n")
+
+
+# ── Public timers and session ────────────────────────────────────────────────
 
 _timers: dict[str, float] = {}
+_session_id: str = ""
+
+def set_session_id(session_id: str) -> None:
+    """Set the current session ID (called at start)."""
+    global _session_id
+    _session_id = session_id
 
 
 def start_timer(key: str) -> None:
@@ -93,6 +123,18 @@ def log_send(
     _file(plain)
     if payload:
         _file_block("PAYLOAD", payload)
+
+    # JSONL logging
+    _append_comms({
+        "timestamp": _now_iso(),
+        "session_id": _session_id,
+        "type": "send",
+        "sender": sender,
+        "receiver": receiver,
+        "task_id": task_id,
+        "summary": summary,
+        "payload_size": len(payload) if payload else 0,
+    })
 
 
 def log_receive(
@@ -146,6 +188,20 @@ def log_reply(
     if payload:
         _file_block("CONTENT", payload)
 
+    # JSONL logging
+    _append_comms({
+        "timestamp": _now_iso(),
+        "session_id": _session_id,
+        "type": "reply",
+        "sender": sender,
+        "receiver": receiver,
+        "task_id": task_id,
+        "status": status,
+        "summary": summary,
+        "payload_size": len(payload) if payload else 0,
+        "elapsed_ms": int(elapsed.rstrip("ms")) if elapsed else None,
+    })
+
 
 def log_verdict(verdict: str, issues: list[str], suggestions: list[str], attempt: int) -> None:
     ts = _ts()
@@ -166,6 +222,19 @@ def log_verdict(verdict: str, issues: list[str], suggestions: list[str], attempt
     for i, sug in enumerate(suggestions, 1):
         _file(f"  suggestion[{i}]: {sug}")
 
+    # JSONL logging
+    _append_metrics({
+        "timestamp": _now_iso(),
+        "session_id": _session_id,
+        "event": "code_review",
+        "attempt": attempt,
+        "verdict": verdict,
+        "issues_count": len(issues),
+        "suggestions_count": len(suggestions),
+        "issues": issues,
+        "suggestions": suggestions,
+    })
+
 
 def log_gemini(agent: str, label: str, content: str) -> None:
     """Log a direct Gemini call (not agent-to-agent)."""
@@ -182,12 +251,23 @@ def log_gemini(agent: str, label: str, content: str) -> None:
 
 
 def log_session_start(task: str) -> None:
+    session_id = str(uuid.uuid4())
+    set_session_id(session_id)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sep = "═" * 70
     print(f"\n{sep}")
     print(f"  SESSION START  {ts}")
+    print(f"  Session ID: {session_id}")
     print(f"  Task: {task}")
     print(f"{sep}\n")
     _file(sep)
-    _file(f"SESSION START  {ts}  task={task!r}")
+    _file(f"SESSION START  {ts}  session_id={session_id}  task={task!r}")
     _file(sep)
+
+    # JSONL logging
+    _append_metrics({
+        "timestamp": _now_iso(),
+        "session_id": session_id,
+        "event": "session_start",
+        "task": task,
+    })

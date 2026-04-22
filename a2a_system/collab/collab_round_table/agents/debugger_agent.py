@@ -23,6 +23,7 @@ from shared.models import (
     DataPart, Message, TaskSendParams, extract_data, extract_text, text_artifact,
 )
 from tools.executor import run_python as _exec_python
+from logger_rt import log_detailed_message
 
 MAX_TOOL_CALLS = 6
 AGENT_PORT = int(os.getenv("DEBUGGER_PORT", "8012"))
@@ -207,6 +208,8 @@ class DebuggerAgent(BaseAgent):
                                 headers={**_auth_headers(), "X-Sender": "DebuggerAgent"},
                                 timeout=10.0,
                             )
+                            # Log detailed message content
+                            log_detailed_message(session_id, "Debugger", to, round_num, content, "peer_message")
                         except Exception as exc:
                             result_msg = f"Failed to deliver to {to}: {exc}"
                         # Notify CommunicationLoggerAgent (best-effort)

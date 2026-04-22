@@ -22,6 +22,7 @@ from shared.models import (
     AgentCard, AgentCapabilities, AgentSkill, Artifact,
     DataPart, Message, TaskSendParams, extract_data, extract_text, text_artifact,
 )
+from logger_rt import log_detailed_message
 
 MAX_TOOL_CALLS = 6
 AGENT_PORT = int(os.getenv("TESTER_PORT", "8013"))
@@ -189,6 +190,8 @@ class TesterAgent(BaseAgent):
                                 headers={**_auth_headers(), "X-Sender": "TesterAgent"},
                                 timeout=10.0,
                             )
+                            # Log detailed message content
+                            log_detailed_message(session_id, "Tester", to, round_num, content, "peer_message")
                         except Exception as exc:
                             result_msg = f"Failed to deliver to {to}: {exc}"
                         # Notify CommunicationLoggerAgent (best-effort)
