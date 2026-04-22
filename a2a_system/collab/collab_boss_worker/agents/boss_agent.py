@@ -52,15 +52,15 @@ You have five tools:
 
   call_planner(task)                  — Get a technical plan from the Planner
   call_coder(plan, feedback?)         — Get implemented code from the Coder
-  call_debugger(code)                 — Run code and catch runtime errors
+  call_debugger(code)                 — Run code, catch errors, and fix them
   call_reviewer(code, original_task, debug_report?)  — Get a code review from the Reviewer
   finish(status)                      — Signal completion
 
 Workflow:
 1. call_planner to get a technical plan
 2. call_coder with that plan
-3. call_debugger with the code to catch runtime errors
-4. call_reviewer with the code, original task, and debug findings
+3. call_debugger with the code to fix runtime errors
+4. call_reviewer with the fixed code and original task
 5. If verdict="pass" → call finish(status="passed")
 6. If verdict="fail" → call_coder again with plan and reviewer feedback
 7. After 3 total coder attempts → call finish(status="best_effort")
@@ -234,24 +234,24 @@ class BossAgent(BaseAgent):
                     if debug_task.status.state == TaskState.failed:
                         tool_result = "ERROR: Debugger failed"
                     else:
-                        tool_result = get_artifact_text(debug_task, "debug_report")
-                        last_debug = tool_result
+                        fixed_code = get_artifact_text(debug_task, "fixed_code")
+                        last_debug = fixed_code
+                        # Update last_code with debugged version
+                        last_code = fixed_code
                         log_reply("DebuggerAgent", "BossAgent", debug_tid,
-                                  debug_task.status.state.value, "debug_report",
-                                  payload=tool_result, elapsed=t)
+                                  debug_task.status.state.value, "fixed_code",
+                                  payload=fixed_code, elapsed=t)
+                        tool_result = fixed_code
 
                 elif name == "call_reviewer":
                     review_tid = f"{task_id}-review-{step}"
                     log_send("BossAgent", "ReviewerAgent", review_tid, "skill='review'", payload=args["code"])
                     start_timer(review_tid)
-                    reviewer_data = {"original_task": args.get("original_task", "")}
-                    if last_debug:
-                        reviewer_data["debug_report"] = last_debug
                     review_task = await _post(http, reviewer_url, TaskSendParams(
                         id=review_tid,
                         message=Message(role="user", parts=[
                             TextPart(text=args["code"]),
-                            DataPart(data=reviewer_data),
+                            DataPart(data={"original_task": args.get("original_task", "")}),
                         ]),
                     ))
                     t = elapsed_ms(review_tid)

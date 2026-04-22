@@ -1,6 +1,6 @@
 """
 Debugger Agent — port 8008
-Executes code and catches runtime errors (exceptions, crashes, output issues).
+Executes code, catches runtime errors, and attempts to fix them.
 Part of the Boss-Worker pipeline: Boss → Planner → Coder → Debugger → Reviewer
 """
 from __future__ import annotations
@@ -52,15 +52,15 @@ def _exec_python(code: str, timeout: int = 10) -> dict:
 
 CARD = AgentCard(
     name="Debugger Agent",
-    description="Debug Python code by running tests and identifying issues.",
+    description="Debug Python code by running it, catching errors, and fixing them.",
     url="http://localhost:8008",
     version="1.0.0",
     capabilities=AgentCapabilities(streaming=True, pushNotifications=False),
     skills=[AgentSkill(
         id="debug",
         name="debug",
-        description="Debug Python code: run tests, identify issues, suggest fixes.",
-        inputModes=["text", "data"],
+        description="Debug and fix Python code: run, identify errors, fix them.",
+        inputModes=["text"],
         outputModes=["text"],
     )],
 )
@@ -68,17 +68,19 @@ CARD = AgentCard(
 SYSTEM = """\
 You are a Python debugging specialist. Your job is to:
 1. Analyze the provided code carefully
-2. Run the code and capture any errors or exceptions
-3. Report what works and what breaks
-4. Generate a structured debug report with findings
+2. Run the code and identify any errors or exceptions
+3. Fix the errors by modifying the code
+4. Test your fixes by running the code again
+5. Return the fixed code or a detailed debug report if unfixable
 
-Focus on:
-- Runtime errors and exceptions
-- Crashes or unexpected behavior
-- Output verification
-- Specific issues and how to fix them
+Workflow:
+1. Try to run the code — if it works, report success
+2. If there are errors, analyze and propose fixes
+3. Use run_python to test your proposed fixes
+4. Iterate until the code works
+5. Return the final fixed code via finish()
 
-Output your findings as a structured report."""
+Be systematic and thorough. Try multiple approaches if needed."""
 
 DEBUG_TOOLS = [
     {"type": "function", "function": {
@@ -94,13 +96,13 @@ DEBUG_TOOLS = [
     }},
     {"type": "function", "function": {
         "name": "finish",
-        "description": "Submit final debug report.",
+        "description": "Return fixed code or debug analysis if unfixable.",
         "parameters": {
             "type": "object",
             "properties": {
-                "report": {"type": "string", "description": "Final debug report"},
+                "fixed_code": {"type": "string", "description": "Fixed code if successful, or debug analysis if unfixable"},
             },
-            "required": ["report"],
+            "required": ["fixed_code"],
         },
     }},
 ]
@@ -116,16 +118,16 @@ class DebuggerAgent(BaseAgent):
         messages = [
             {
                 "role": "user",
-                "content": f"""Run this Python code and report any errors:
+                "content": f"""Debug and fix this Python code:
 
 ```python
 {code}
 ```
 
-Execute the code, capture any runtime errors or exceptions, and provide a debug report.""",
+Execute the code. If there are errors, fix them and test the fixes. Return the fixed code.""",
             }
         ]
-        last_report = ""
+        last_result = ""
 
         async with asyncio.timeout(30):
             for _ in range(MAX_TOOL_CALLS):
@@ -140,8 +142,8 @@ Execute the code, capture any runtime errors or exceptions, and provide a debug 
                 name, args, call_id = tc
 
                 if name == "finish":
-                    last_report = args.get("report", "")
-                    messages.append(tool_result_message(call_id, "Report submitted."))
+                    last_result = args.get("fixed_code", "")
+                    messages.append(tool_result_message(call_id, "Fixed code submitted."))
                     break
 
                 elif name == "run_python":
@@ -156,7 +158,7 @@ Execute the code, capture any runtime errors or exceptions, and provide a debug 
                 else:
                     messages.append(tool_result_message(call_id, f"Unknown tool: {name}"))
 
-        return [text_artifact("debug_report", last_report or "No debug report generated.")]
+        return [text_artifact("fixed_code", last_result or "No fixed code generated.")]
 
 
 agent = DebuggerAgent()

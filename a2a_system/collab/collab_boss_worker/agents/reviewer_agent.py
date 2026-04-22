@@ -49,7 +49,6 @@ hints, and has docstrings. Otherwise "fail" with specific issues listed."""
 THINK_SUFFIX = """
 
 Before writing your verdict, reason through:
-- If debug findings are provided, what runtime errors were caught?
 - Does the code correctly implement what the task asked for?
 - Are there any logic errors, off-by-one errors, or missing edge cases?
 - Are type hints and docstrings present on every function?
@@ -67,11 +66,8 @@ class ReviewerAgent(BaseAgent):
         code = extract_text(message)
         data = extract_data(message)
         original_task = data.get("original_task", "")
-        debug_report = data.get("debug_report", "")
 
         user_content = f"Original task: {original_task}\n\nCode to review:\n{code}"
-        if debug_report:
-            user_content += f"\n\nDebug report from testing:\n{debug_report}"
 
         # ── Turn 1: Think ──────────────────────────────────────────────────
         thinking = await asyncio.to_thread(
