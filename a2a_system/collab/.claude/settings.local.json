@@ -18,7 +18,19 @@
       "Bash(python3 -m json.tool)",
       "Bash(python3 -m uvicorn agents.planner_agent:app --port 8001 --no-access-log)",
       "Bash(python3 -m uvicorn agents.coder_agent:app --port 8002 --no-access-log)",
-      "Bash(python3 -m uvicorn agents.reviewer_agent:app --port 8003 --no-access-log)"
+      "Bash(python3 -m uvicorn agents.reviewer_agent:app --port 8003 --no-access-log)",
+      "Bash(pkill -f \"python3 run_all.py\")",
+      "Bash(xargs -r kill -9)",
+      "Read(//private/tmp/**)",
+      "Bash(xargs -r kill -9 sleep 1 python3 run_all.py)",
+      "Bash(curl -s http://localhost:8099/.well-known/agent-registry.json)",
+      "Bash(xargs -r kill -9 sleep 2 lsof -i :8000,:8001,:8002,:8003,:8004,:8005,:8006,:8007,:8099)",
+      "Bash(BG_PID=$! sleep 12 echo \"=== Testing agents ===\" echo \"Boss:\")",
+      "Bash(curl -s http://localhost:8000/.well-known/agent.json)",
+      "Bash(curl -s http://localhost:8001/.well-known/agent.json)",
+      "Bash(curl -s http://localhost:8002/.well-known/agent.json)",
+      "Bash(curl -s http://localhost:8003/.well-known/agent.json)",
+      "Bash(python3 run_round_table.py)"
     ]
   }
 }
