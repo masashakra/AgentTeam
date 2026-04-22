@@ -12,6 +12,7 @@ Ports:
   8005 CodeValidatorAgent
   8006 CommLoggerAgent
   8007 MetricsTrackerAgent
+  8008 DebuggerAgent
 """
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ AGENTS = [
     ("CodeValidatorAgent",  8005, "agents.code_validator_agent:app"),
     ("CommLoggerAgent",     8006, "agents.comm_logger_agent:app"),
     ("MetricsTrackerAgent", 8007, "agents.metrics_tracker_agent:app"),
+    ("DebuggerAgent",       8008, "agents.debugger_agent:app"),
 ]
 
 COLORS = {
@@ -53,7 +55,8 @@ COLORS = {
     "TestGeneratorAgent": "\033[96m",   # cyan
     "CodeValidatorAgent": "\033[91m",   # red
     "CommLoggerAgent":    "\033[90m",   # dark gray
-    "MetricsTrackerAgent": "\033[95m",  # magenta (reuse or choose another)
+    "MetricsTrackerAgent": "\033[95m",  # magenta
+    "DebuggerAgent":      "\033[1;35m", # bright magenta
     "Orchestrator":       "\033[1;37m", # bold white
 }
 RESET = "\033[0m"

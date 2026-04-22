@@ -48,25 +48,28 @@ CARD = AgentCard(
 
 BOSS_SYSTEM = """\
 You are an autonomous engineering manager orchestrating a software delivery pipeline.
-You have four tools:
+You have five tools:
 
   call_planner(task)                  — Get a technical plan from the Planner
   call_coder(plan, feedback?)         — Get implemented code from the Coder
-  call_reviewer(code, original_task)  — Get a code review from the Reviewer
+  call_debugger(code, test_suite)     — Debug code and get findings from Debugger
+  call_reviewer(code, original_task, debug_report?)  — Get a code review from the Reviewer
   finish(status)                      — Signal completion
 
 Workflow:
 1. call_planner to get a technical plan
 2. call_coder with that plan
-3. call_reviewer with the code and original task
-4. If verdict="pass" → call finish(status="passed")
-5. If verdict="fail" → call_coder again with the plan AND reviewer feedback
-6. After 3 total coder attempts → call finish(status="best_effort")
+3. call_debugger with the code and test suite to identify issues
+4. call_reviewer with the code, original task, and debug findings
+5. If verdict="pass" → call finish(status="passed")
+6. If verdict="fail" → call_coder again with plan, reviewer feedback, AND debug findings
+7. After 3 total coder attempts → call finish(status="best_effort")
 
 Rules:
 - Always call call_planner exactly once at the start
+- Always call call_debugger after call_coder (before review)
 - Never call finish without at least one review result
-- Always pass feedback to call_coder on retries
+- Always pass feedback to call_coder on retries (include both reviewer AND debug findings)
 - You MUST call finish() as your final action"""
 
 BOSS_TOOLS = [
@@ -88,12 +91,23 @@ BOSS_TOOLS = [
             "required": ["plan"]},
     }},
     {"type": "function", "function": {
+        "name": "call_debugger",
+        "description": "Send code to DebuggerAgent to identify issues via dynamic testing.",
+        "parameters": {"type": "object",
+            "properties": {
+                "code": {"type": "string"},
+                "test_suite": {"type": "array", "items": {"type": "object"}, "description": "Test cases to run"},
+            },
+            "required": ["code", "test_suite"]},
+    }},
+    {"type": "function", "function": {
         "name": "call_reviewer",
         "description": "Send code to ReviewerAgent for quality review.",
         "parameters": {"type": "object",
             "properties": {
                 "code": {"type": "string"},
                 "original_task": {"type": "string"},
+                "debug_report": {"type": ["string", "null"], "description": "Debug findings from Debugger."},
             },
             "required": ["code", "original_task"]},
     }},
@@ -134,15 +148,18 @@ class BossAgent(BaseAgent):
 
         messages = [{"role": "user", "content": f"Task: {task_description}"}]
         last_code  = ""
+        last_debug = ""
         last_review = ""
 
         # Discover workers at runtime — no hardcoded URLs
         planner_card  = await find_agent_by_name("Planner Agent")
         coder_card    = await find_agent_by_name("Coder Agent")
+        debugger_card = await find_agent_by_name("Debugger Agent")
         reviewer_card = await find_agent_by_name("Reviewer Agent")
 
         planner_url  = f"{planner_card.url}/tasks/send"
         coder_url    = f"{coder_card.url}/tasks/send"
+        debugger_url = f"{debugger_card.url}/tasks/send"
         reviewer_url = f"{reviewer_card.url}/tasks/send"
 
         async with httpx.AsyncClient() as http:
@@ -207,15 +224,40 @@ class BossAgent(BaseAgent):
                                   code_task.status.state.value, "implementation",
                                   payload=tool_result, elapsed=t)
 
+                elif name == "call_debugger":
+                    debug_tid = f"{task_id}-debug-{step}"
+                    test_suite = args.get("test_suite", [])
+                    log_send("BossAgent", "DebuggerAgent", debug_tid, "skill='debug'", payload=args["code"])
+                    start_timer(debug_tid)
+                    debug_task = await _post(http, debugger_url, TaskSendParams(
+                        id=debug_tid,
+                        message=Message(role="user", parts=[
+                            TextPart(text=args["code"]),
+                            DataPart(data={"test_suite": test_suite}),
+                        ]),
+                    ))
+                    t = elapsed_ms(debug_tid)
+                    if debug_task.status.state == TaskState.failed:
+                        tool_result = "ERROR: Debugger failed"
+                    else:
+                        tool_result = get_artifact_text(debug_task, "debug_report")
+                        last_debug = tool_result
+                        log_reply("DebuggerAgent", "BossAgent", debug_tid,
+                                  debug_task.status.state.value, "debug_report",
+                                  payload=tool_result, elapsed=t)
+
                 elif name == "call_reviewer":
                     review_tid = f"{task_id}-review-{step}"
                     log_send("BossAgent", "ReviewerAgent", review_tid, "skill='review'", payload=args["code"])
                     start_timer(review_tid)
+                    reviewer_data = {"original_task": args.get("original_task", "")}
+                    if last_debug:
+                        reviewer_data["debug_report"] = last_debug
                     review_task = await _post(http, reviewer_url, TaskSendParams(
                         id=review_tid,
                         message=Message(role="user", parts=[
                             TextPart(text=args["code"]),
-                            DataPart(data={"original_task": args.get("original_task", "")}),
+                            DataPart(data=reviewer_data),
                         ]),
                     ))
                     t = elapsed_ms(review_tid)
