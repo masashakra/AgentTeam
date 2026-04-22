@@ -15,7 +15,7 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.par
 
 import uvicorn
 
-from groq_setup.infer import groq_chat, get_tool_call, tool_result_message
+from groq_setup.infer import groq_chat, groq_complete, get_tool_call, tool_result_message
 
 from shared.base_agent import BaseAgent
 from shared.models import (
@@ -39,29 +39,16 @@ CARD = AgentCard(
 )
 
 SYSTEM = """\
-You are an expert Python developer with the ability to execute code.
-Given a technical plan (and optional reviewer feedback), implement working Python code.
+You are an expert Python developer. Implement Python code based on the technical plan.
 
-You have two tools:
-  run_python(code)  — execute Python code and see stdout + stderr
-  finish(code)      — return your final implementation when satisfied
+You can run code with run_python(code) to test it. When done, call finish(code) with your final implementation.
 
-Workflow:
-1. Write an initial implementation based on the plan
-2. Call run_python to test it — check for errors and correct output
-3. Fix any bugs and run again
-4. When code runs correctly and handles edge cases, call finish(code)
-
-Requirements for finished code:
-- Type hints on every function
-- Docstring on every function
-- All edge cases from the plan handled
-- Raw Python only — no markdown fences
-
-Additional requirements:
- - Do not use `typing_extensions` or unsupported typing helpers such as `SupportsLessThan`.
- - Prefer standard Python 3.12 typing and only use built-in typing imports.
- - Ensure the code is valid Python before calling finish().
+Guidelines:
+- Write clean, working code with type hints and docstrings
+- Test your code with run_python to verify it works
+- Fix any errors and retry until it passes
+- Use only standard Python 3.12 typing (no typing_extensions)
+- No markdown fences in final code
 """
 
 CODER_TOOLS = [
@@ -124,7 +111,7 @@ class CoderAgent(BaseAgent):
 
         for step in range(MAX_TOOL_CALLS):
             assistant_msg = await asyncio.to_thread(
-                groq_chat, messages, CODER_TOOLS, SYSTEM, "required", 4096
+                groq_chat, messages, CODER_TOOLS, SYSTEM, "auto", 2048
             )
             messages.append(assistant_msg)
 
