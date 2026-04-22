@@ -1,5 +1,5 @@
 """
-infer.py — Ollama LLM backend with automatic key rotation.
+infer.py — Groq LLM backend with automatic key rotation.
 
 Provides two functions:
   generate(prompt)            — single-turn code generation
@@ -17,8 +17,8 @@ try:
 except ImportError:
     from key_manager import manager    # when run directly (python3 infer.py)
 
-MODEL   = "llama2"
-API_URL = "http://localhost:11434/v1/chat/completions"
+MODEL   = "llama-3.3-70b-versatile"
+API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 CODE_SYSTEM = """\
 You are an expert software engineer. When asked to write code:
@@ -32,11 +32,11 @@ You are an expert software engineer. When asked to write code:
 # ── Core API call ─────────────────────────────────────────────────────────────
 
 def _post(api_key: str, payload: dict) -> dict:
-    """POST to Ollama and return the assistant message dict."""
-    # Ollama runs locally, no authentication needed
+    """POST to Groq and return the assistant message dict."""
     resp = httpx.post(
         API_URL,
         json=payload,
+        headers={"Authorization": f"Bearer {api_key}"},
         timeout=120,
     )
     if resp.status_code != 200:
