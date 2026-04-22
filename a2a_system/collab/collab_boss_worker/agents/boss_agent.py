@@ -52,24 +52,24 @@ You have five tools:
 
   call_planner(task)                  — Get a technical plan from the Planner
   call_coder(plan, feedback?)         — Get implemented code from the Coder
-  call_debugger(code, test_suite)     — Debug code and get findings from Debugger
+  call_debugger(code)                 — Run code and catch runtime errors
   call_reviewer(code, original_task, debug_report?)  — Get a code review from the Reviewer
   finish(status)                      — Signal completion
 
 Workflow:
 1. call_planner to get a technical plan
 2. call_coder with that plan
-3. call_debugger with the code and test suite to identify issues
+3. call_debugger with the code to catch runtime errors
 4. call_reviewer with the code, original task, and debug findings
 5. If verdict="pass" → call finish(status="passed")
-6. If verdict="fail" → call_coder again with plan, reviewer feedback, AND debug findings
+6. If verdict="fail" → call_coder again with plan and reviewer feedback
 7. After 3 total coder attempts → call finish(status="best_effort")
 
 Rules:
 - Always call call_planner exactly once at the start
 - Always call call_debugger after call_coder (before review)
 - Never call finish without at least one review result
-- Always pass feedback to call_coder on retries (include both reviewer AND debug findings)
+- Always pass feedback to call_coder on retries (reviewer feedback)
 - You MUST call finish() as your final action"""
 
 BOSS_TOOLS = [
@@ -92,13 +92,12 @@ BOSS_TOOLS = [
     }},
     {"type": "function", "function": {
         "name": "call_debugger",
-        "description": "Send code to DebuggerAgent to identify issues via dynamic testing.",
+        "description": "Send code to DebuggerAgent to catch runtime errors.",
         "parameters": {"type": "object",
             "properties": {
                 "code": {"type": "string"},
-                "test_suite": {"type": "array", "items": {"type": "object"}, "description": "Test cases to run"},
             },
-            "required": ["code", "test_suite"]},
+            "required": ["code"]},
     }},
     {"type": "function", "function": {
         "name": "call_reviewer",
@@ -138,11 +137,10 @@ class BossAgent(BaseAgent):
     async def handle(self, message: Message, task_id: str) -> list[Artifact]:
         task_description = extract_text(message)
 
-        # [LG] Read orchestration context passed by LangGraph (round number, test suite)
+        # [LG] Read orchestration context passed by LangGraph (round number)
         # Boss uses these internally — LangGraph never sees the contents
         data = extract_data(message)
         current_round = data.get("round", 1)
-        test_suite    = data.get("test_suite", [])
 
         log_session_start(f"Round {current_round}: {task_description}")
 
@@ -226,15 +224,11 @@ class BossAgent(BaseAgent):
 
                 elif name == "call_debugger":
                     debug_tid = f"{task_id}-debug-{step}"
-                    test_suite = args.get("test_suite", [])
                     log_send("BossAgent", "DebuggerAgent", debug_tid, "skill='debug'", payload=args["code"])
                     start_timer(debug_tid)
                     debug_task = await _post(http, debugger_url, TaskSendParams(
                         id=debug_tid,
-                        message=Message(role="user", parts=[
-                            TextPart(text=args["code"]),
-                            DataPart(data={"test_suite": test_suite}),
-                        ]),
+                        message=Message(role="user", parts=[TextPart(text=args["code"])]),
                     ))
                     t = elapsed_ms(debug_tid)
                     if debug_task.status.state == TaskState.failed:

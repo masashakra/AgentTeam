@@ -49,7 +49,7 @@ hints, and has docstrings. Otherwise "fail" with specific issues listed."""
 THINK_SUFFIX = """
 
 Before writing your verdict, reason through:
-- If debug findings are provided, what issues did the tests uncover?
+- If debug findings are provided, what runtime errors were caught?
 - Does the code correctly implement what the task asked for?
 - Are there any logic errors, off-by-one errors, or missing edge cases?
 - Are type hints and docstrings present on every function?

@@ -1,6 +1,6 @@
 """
 Debugger Agent — port 8008
-Dynamic code debugging: executes code against test suite, identifies issues, reports findings.
+Executes code and catches runtime errors (exceptions, crashes, output issues).
 Part of the Boss-Worker pipeline: Boss → Planner → Coder → Debugger → Reviewer
 """
 from __future__ import annotations
@@ -68,17 +68,15 @@ CARD = AgentCard(
 SYSTEM = """\
 You are a Python debugging specialist. Your job is to:
 1. Analyze the provided code carefully
-2. Run the code against the provided test suite
-3. Capture any errors, failures, or edge cases
-4. Generate a structured debug report with findings and suggestions
-5. Be concise but thorough
+2. Run the code and capture any errors or exceptions
+3. Report what works and what breaks
+4. Generate a structured debug report with findings
 
 Focus on:
 - Runtime errors and exceptions
-- Test failures (which tests fail, why)
-- Edge cases that might break the code
-- Specific line numbers where issues occur
-- Concrete suggestions to fix the issues
+- Crashes or unexpected behavior
+- Output verification
+- Specific issues and how to fix them
 
 Output your findings as a structured report."""
 
@@ -114,22 +112,17 @@ class DebuggerAgent(BaseAgent):
 
     async def handle(self, message: Message, task_id: str) -> list[Artifact]:
         code = extract_text(message)
-        data = extract_data(message)
-        test_suite = data.get("test_suite", [])
 
         messages = [
             {
                 "role": "user",
-                "content": f"""Debug this Python code:
+                "content": f"""Run this Python code and report any errors:
 
 ```python
 {code}
 ```
 
-Test Suite (run each test):
-{self._format_tests(test_suite)}
-
-Run the tests and provide a debug report.""",
+Execute the code, capture any runtime errors or exceptions, and provide a debug report.""",
             }
         ]
         last_report = ""
@@ -164,16 +157,6 @@ Run the tests and provide a debug report.""",
                     messages.append(tool_result_message(call_id, f"Unknown tool: {name}"))
 
         return [text_artifact("debug_report", last_report or "No debug report generated.")]
-
-    def _format_tests(self, test_suite: list[dict]) -> str:
-        if not test_suite:
-            return "(No tests provided)"
-        tests_str = ""
-        for i, test in enumerate(test_suite, 1):
-            tests_str += f"\nTest {i}: {test.get('description', 'test')}\n"
-            tests_str += f"  Input: {test.get('input', 'N/A')}\n"
-            tests_str += f"  Expected: {test.get('expected', 'N/A')}\n"
-        return tests_str
 
 
 agent = DebuggerAgent()
